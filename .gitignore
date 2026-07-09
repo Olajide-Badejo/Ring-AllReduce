@@ -1,0 +1,53 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+
+# Compiled objects / binaries
+*.o
+*.obj
+*.a
+*.so
+*.exe
+*.out
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# LaTeX intermediates (final PDF and committed figures/tables are NOT ignored,
+# see the negation rules below and report/figures/.gitkeep, report/tables/.gitkeep)
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.bbl
+report/*.blg
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+report/sections/*.aux
+report/*.bcf
+report/*.run.xml
+
+# Generated figures/tables are build products of analysis/run_full_analysis.py.
+# We gitignore the directory contents by default except for sample_run's
+# committed copies (kept separately under results/sample_run/), and a .gitkeep
+# so the directories exist in a fresh checkout.
+report/figures/*
+!report/figures/.gitkeep
+report/tables/*
+!report/tables/.gitkeep
+
+# OS cruft
+.DS_Store

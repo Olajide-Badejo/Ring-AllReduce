@@ -1,0 +1,6 @@
+---
+# Standard Google C++ style, unmodified. See docs/DESIGN_DECISIONS.md for why
+# Google over LLVM was chosen for this project.
+BasedOnStyle: Google
+Language: Cpp
+ColumnLimit: 100
