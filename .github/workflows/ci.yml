@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Open MPI and CMake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            openmpi-bin libopenmpi-dev cmake build-essential
+
+      - name: Configure
+        run: cmake -S . -B build -DRING_ALLREDUCE_WARNINGS_AS_ERRORS=ON -DENABLE_SANITIZERS=ON
+
+      - name: Build
+        run: cmake --build build -j
+
+      # GitHub-hosted runners execute as root and typically have fewer cores
+      # than this project's N=16 test case, so every mpirun invocation this
+      # project issues (see tests/CMakeLists.txt) already carries
+      # --allow-run-as-root --oversubscribe unconditionally; nothing extra
+      # is needed here.
+      - name: Run correctness test suite
+        run: ctest --test-dir build --output-on-failure
+
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install analysis dependencies
+        run: pip install -r analysis/requirements.txt
+      - name: Import-check the analysis pipeline
+        run: |
+          cd analysis
+          python3 -c "import load_results, theoretical_model, generate_plots, generate_tables"
+      - name: Run the pipeline against the committed sample dataset
+        run: python3 analysis/run_full_analysis.py
