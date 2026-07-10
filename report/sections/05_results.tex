@@ -1,0 +1,54 @@
+\section{Results}
+\label{sec:results}
+
+\subsection{Bandwidth metrics and cost model}
+\label{sec:cost-model}
+
+Following the convention \texttt{nccl-tests} itself uses \citep{nvidia2024ncclperf}, since this project explicitly mirrors NCCL's ring transport, two bandwidth figures are computed from every timed measurement. Algorithm bandwidth is the simple ratio $\text{algbw} = M / T$ of message size to elapsed time. Bus bandwidth rescales it by $\text{busbw} = \text{algbw} \cdot \frac{2(N-1)}{N}$, the ratio of bytes actually moved over the network to bytes of input, for any bandwidth-optimal point-to-point allreduce regardless of whether its underlying algorithm is a ring, a tree, or something else \citep{nvidia2024ncclperf}. Because that factor is baked in, busbw is comparable across different process counts against one single hardware bandwidth ceiling, which algbw alone is not.
+
+That ceiling is estimated from this project's own data, not assumed. The Hockney latency-bandwidth model,
+\begin{equation}
+  T(N, M) \approx 2(N-1)\,\alpha \;+\; 2\,\frac{N-1}{N}\,M\,\beta,
+  \label{eq:hockney}
+\end{equation}
+gives $\alpha$ (seconds of fixed per-message latency) and $\beta$ (seconds per byte, i.e. inverse bandwidth) as the two free parameters, fit independently for each algorithm variant by weighted least squares against that variant's own measured $(N, M, T)$ triples (\texttt{analysis/theoretical\_model.py}). The fit is weighted by $1/T$, turning it into a relative rather than absolute error minimization: this project's sweep spans roughly seven orders of magnitude in message size and therefore in $T$, and an unweighted fit is so dominated by the handful of largest, slowest configurations that $\alpha$, whose entire contribution to $T$ is only visible at the smallest sizes, comes out badly biased even though $\beta$ and the overall $R^2$ both look excellent. This was not a hypothetical concern: fitting the (synthetic, see Section~\ref{sec:dataset-note}) sample dataset unweighted recovered $\beta$ to within a fraction of a percent of its known generating value but missed $\alpha$ by as much as 17\%; the weighted fit recovered both to within 0.3\% on every algorithm variant. Theoretical peak bus bandwidth is reported as $1/\beta$, and efficiency at a given configuration as achieved busbw divided by that peak.
+
+\subsection{Achieved bus bandwidth versus message size}
+
+Figure~\ref{fig:busbw-vs-size} plots achieved busbw against message size for a representative subset of process counts, one panel per algorithm variant, with each panel's fitted $1/\beta$ shown as a dashed reference line. All three variants show the same qualitative shape the cost model predicts: a flat, near-zero region at small message sizes where busbw has not yet risen to meaningfully approach the asymptote, transitioning to a region that climbs toward, and at the largest sizes essentially reaches, the dashed theoretical peak. Table~\ref{tab:summary} quotes this concretely at the two ends of the sweep for $N=16$: busbw at 8 bytes is a small fraction of a percent of theoretical peak for every variant, while busbw at 128~MiB reaches roughly 99 to 101\% of the fitted peak (a value fractionally over 100\% simply reflects noise in that single measured cell relative to a peak fit across the whole sweep, not a violation of the model).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/busbw_vs_size.pdf}
+\caption{Achieved bus bandwidth versus message size, log-scaled on the size axis, for $N \in \{2,4,8,16\}$, one panel per algorithm variant. The dashed line in each panel is that variant's fitted theoretical peak, $1/\beta$.}
+\label{fig:busbw-vs-size}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\input{tables/summary_table.tex}
+\caption{Achieved busbw and percent of fitted theoretical peak at the smallest (8~B) and largest (128~MiB) swept message sizes, at $N=16$: the most demanding process count in the sweep and therefore the most informative single configuration to summarize (averaging across $N$ would blend together regimes with very different busbw at the same message size and would not describe any one real configuration).}
+\label{tab:summary}
+\end{table}
+
+\subsection{Efficiency across the full sweep}
+
+Figure~\ref{fig:efficiency-heatmap} extends this across every swept $(N, M)$ combination at once. The pattern is consistent across all three algorithm variants: efficiency is near zero across almost the entire small-message column range regardless of $N$, and rises toward 1 only once message size grows large enough that the bandwidth term of Equation~\ref{eq:hockney} dominates the latency term. The message size at which that transition happens shifts right (toward larger messages) as $N$ grows, exactly as Equation~\ref{eq:hockney} predicts: the latency term scales with $N-1$ while, at fixed busbw efficiency, the bandwidth term's threshold in $M$ does not shift down to compensate.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/efficiency_heatmap.pdf}
+\caption{Efficiency (achieved busbw divided by that variant's fitted theoretical peak) across every swept process count and message size, one panel per algorithm variant.}
+\label{fig:efficiency-heatmap}
+\end{figure}
+
+\subsection{Decomposing the latency floor}
+
+Figure~\ref{fig:latency-decomposition} isolates the smallest swept message size (8 bytes) and, for the custom ring implementation specifically, breaks the cost model's prediction into its two additive terms per process count, alongside a raw \texttt{MPI\_Send}/\texttt{MPI\_Recv} ping-pong one-way latency measured on the same hardware (\texttt{apps/pingpong}, methodologically the same one-way-latency-from-round-trip convention as OSU Micro-Benchmarks' \texttt{osu\_latency} \citep{osu2024benchmarks}). At this message size the bandwidth term is negligible at every $N$ shown, essentially confirming that the modeled latency term $2(N-1)\alpha$ is the entire predicted cost once messages are small enough. Section~\ref{sec:discussion} uses the gap between that modeled term and the raw ping-pong reference to quantify, rather than merely assert, how much of the ring's small-message cost is genuine per-message latency versus rank-to-rank synchronization overhead.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/latency_decomposition.pdf}
+\caption{At the smallest swept message size, the ring implementation's modeled latency term $2(N-1)\alpha$ and bandwidth term $2\frac{N-1}{N}M\beta$ per process count, against a raw point-to-point ping-pong one-way latency measured on the same hardware.}
+\label{fig:latency-decomposition}
+\end{figure}

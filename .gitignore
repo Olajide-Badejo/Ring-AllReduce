@@ -27,6 +27,11 @@ venv/
 
 # LaTeX intermediates (final PDF and committed figures/tables are NOT ignored,
 # see the negation rules below and report/figures/.gitkeep, report/tables/.gitkeep)
+# The compiled report is a build artifact (see `make report` and
+# .github/workflows/report.yml, which uploads it as a CI artifact), not
+# tracked source -- consistent with the LaTeX intermediates above.
+report/main.pdf
+
 report/*.aux
 report/*.log
 report/*.out

@@ -1,0 +1,58 @@
+\section{Background and Algorithm}
+\label{sec:background}
+
+\subsection{Problem statement}
+
+Given $N$ MPI ranks, each holding a local buffer of \texttt{count} elements of type $T$, allreduce computes the elementwise combination (sum, by default) of all $N$ buffers and leaves the identical result on every rank, in place. The naive approach, everyone sends their buffer to rank 0, rank 0 combines all $N$ copies and broadcasts the result, moves $2(N-1)M$ bytes through rank 0 alone, where $M$ is the buffer size in bytes. Rank 0's link is a bottleneck whose load grows linearly with $N$: doubling the number of workers doubles the bytes rank 0 alone must move. A bandwidth-optimal algorithm instead keeps the total data any single rank sends or receives independent of $N$ as $N$ grows. Ring-allreduce, described by \citet{patarasuk2009bandwidth} and used as the ring transport inside NCCL \citep{nvidia2024nccl}, is one such algorithm.
+
+\subsection{Two-phase ring-allreduce}
+
+The implementation in this repository (\texttt{include/ring\_allreduce/ring\_allreduce.hpp}) follows \citet{patarasuk2009bandwidth}'s two-phase construction directly on MPI point-to-point calls, with no MPI collective anywhere inside it:
+
+\begin{enumerate}
+  \item \textbf{Reduce-scatter}, $N-1$ steps. The buffer is split into $N$ contiguous chunks (Section~\ref{sec:implementation} covers the split itself). Every rank sends its current copy of one chunk to $\text{next} = (\text{rank}+1) \bmod N$ and, in the same step, receives a chunk from $\text{prev} = (\text{rank}-1+N) \bmod N$, reducing the incoming data into its own copy of that chunk. Which chunk index is sent and received rotates by one position every step, so that after $N-1$ steps every rank has accumulated contributions from all $N$ ranks into exactly one chunk: rank $r$ ends this phase holding the fully-reduced chunk at index $(r+1) \bmod N$.
+  \item \textbf{All-gather}, $N-1$ steps. The same ring topology now circulates the $N$ fully-reduced chunks so every rank ends up with all of them. Each step is structurally identical to reduce-scatter's send/receive pattern, except the receiving rank overwrites its local copy directly instead of reducing into it, since the incoming chunk is already fully reduced.
+\end{enumerate}
+
+Figure~\ref{fig:ring-topology} shows the ring topology for $N=4$. Send and receive at each step are issued concurrently (\texttt{MPI\_Isend} and \texttt{MPI\_Irecv}, both outstanding before a single \texttt{MPI\_Waitall}); a blocking send-then-receive would serialize every step and roughly double the measured per-step time without changing the algorithm's data-movement volume at all; Section~\ref{sec:discussion} returns to why that concurrency requirement, and the rank-to-rank handshake it implies, is itself a source of measurable overhead.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  rank/.style={circle, draw, minimum size=1.3cm, thick},
+  every node/.style={font=\small}
+]
+  \node[rank] (r0) at (90:2.6cm) {$P_0$};
+  \node[rank] (r1) at (0:2.6cm) {$P_1$};
+  \node[rank] (r2) at (270:2.6cm) {$P_2$};
+  \node[rank] (r3) at (180:2.6cm) {$P_3$};
+
+  \draw[-{Latex[length=3mm]}, thick] (r0) to[bend left=25] (r1);
+  \draw[-{Latex[length=3mm]}, thick] (r1) to[bend left=25] (r2);
+  \draw[-{Latex[length=3mm]}, thick] (r2) to[bend left=25] (r3);
+  \draw[-{Latex[length=3mm]}, thick] (r3) to[bend left=25] (r0);
+
+  \node[above right=0.05cm and -0.3cm of $(r0)!0.5!(r1)$] {chunk};
+  \node[below right=0.05cm and -0.3cm of $(r1)!0.5!(r2)$] {chunk};
+  \node[below left=0.05cm and -0.3cm of $(r2)!0.5!(r3)$] {chunk};
+  \node[above left=0.05cm and -0.3cm of $(r3)!0.5!(r0)$] {chunk};
+\end{tikzpicture}
+\caption{Ring topology for $N=4$ ranks. Each rank sends to $(\text{rank}+1) \bmod N$ and receives from $(\text{rank}-1+N) \bmod N$ at every one of the $2(N-1)$ steps. Reduce-scatter reduces the incoming chunk into the local copy; all-gather overwrites it directly.}
+\label{fig:ring-topology}
+\end{figure}
+
+Total steps across both phases: $2(N-1)$. Total data sent (and received) per rank across the whole operation is $2M\cdot\frac{N-1}{N}$, which approaches $2M$ as $N$ grows and, critically, never exceeds it: the per-rank data volume is bounded independent of $N$, which is the bandwidth-optimality property Section~\ref{sec:introduction} motivated this project with.
+
+\subsection{Step count versus alternative collective algorithms}
+\label{sec:step-count}
+
+Bandwidth optimality is not the only thing that matters. Ring-allreduce pays $2(N-1)$ sequential round trips, each with its own fixed per-message latency, regardless of how small the message is. Algorithms based on recursive halving and doubling reach the same asymptotic bandwidth optimality with only $O(\log N)$ steps for power-of-two $N$. Rabenseifner's algorithm, recursive-halving reduce-scatter followed by recursive-doubling all-gather, analyzed by \citet{thakur2005optimization}, is the standard example, and is almost certainly what Open MPI's \texttt{coll/tuned} component switches to for a meaningful part of this project's own sweep (Section~\ref{sec:mca-forcing} describes how this report isolates that effect). Table~\ref{tab:step-count} makes the comparison concrete for every $N$ this project benchmarks.
+
+\begin{table}[htbp]
+\centering
+\input{tables/step_count_table.tex}
+\caption{Number of communication steps for $N = 2..16$: ring's $2(N-1)$ grows linearly in $N$, while recursive doubling's $\lceil\log_2 N\rceil$ and Rabenseifner's $2\lceil\log_2 N\rceil$ grow logarithmically. At $N=16$, ring takes roughly $3.75\times$ as many steps as Rabenseifner for the same asymptotic bandwidth optimality.}
+\label{tab:step-count}
+\end{table}
+
+This is the mechanism, not an excuse, behind a result Section~\ref{sec:discussion} discusses in full: at small and moderate message sizes, where per-step latency rather than bandwidth dominates total time, a correct, bandwidth-optimal ring can lose to an algorithm that simply takes fewer steps, even when that algorithm moves asymptotically the same amount of data. Reporting only "my implementation was slower than \texttt{MPI\_Allreduce}" without this step-count context would be reporting a symptom without its cause.

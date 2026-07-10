@@ -1,0 +1,46 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black,
+  pdftitle={Ring-AllReduce From Scratch},
+  pdfsubject={Design, correctness, and benchmarking of a ring-allreduce collective over MPI point-to-point primitives}
+}
+
+\title{Ring-AllReduce From Scratch: \\ Design, Correctness, and Benchmarking Against \texttt{MPI\_Allreduce}}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\vspace{-2.5em}
+
+\begin{abstract}
+This report documents a from-scratch implementation of the ring-allreduce collective, built directly on MPI point-to-point primitives rather than any MPI collective call, and benchmarks it against vendor \texttt{MPI\_Allreduce} across message sizes from 8 bytes to 128 MiB and process counts from 2 to 16. A Hockney-style latency-bandwidth cost model is fit to the measured data via weighted least squares, giving the hardware's own alpha (per-message latency) and beta (inverse bandwidth) rather than assumed textbook constants. The results are used to separate two distinct small-message bottlenecks, pipeline fill latency and rank synchronization overhead, and to explain the specific conditions under which a from-scratch ring implementation can lose to Open MPI's tuned collective selection despite moving strictly less data asymptotically.
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_background}
+\input{sections/03_implementation}
+\input{sections/04_experimental_setup}
+\input{sections/05_results}
+\input{sections/06_discussion}
+\input{sections/07_conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
