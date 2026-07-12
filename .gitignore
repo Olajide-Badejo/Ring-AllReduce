@@ -25,13 +25,11 @@ __pycache__/
 .venv/
 venv/
 
-# LaTeX intermediates (final PDF and committed figures/tables are NOT ignored,
-# see the negation rules below and report/figures/.gitkeep, report/tables/.gitkeep)
-# The compiled report is a build artifact (see `make report` and
-# .github/workflows/report.yml, which uploads it as a CI artifact), not
-# tracked source -- consistent with the LaTeX intermediates above.
-report/main.pdf
-
+# LaTeX intermediates only. The compiled report/main.pdf IS committed, on
+# purpose: the build spec asks for the repository to be browsable with zero
+# setup and no MPI, and a reader landing on GitHub should be able to open the
+# finished report and see the figures without cloning, installing a TeX
+# distribution, or having MPI hardware. Regenerate it with `make report`.
 report/*.aux
 report/*.log
 report/*.out
@@ -45,14 +43,12 @@ report/sections/*.aux
 report/*.bcf
 report/*.run.xml
 
-# Generated figures/tables are build products of analysis/run_full_analysis.py.
-# We gitignore the directory contents by default except for sample_run's
-# committed copies (kept separately under results/sample_run/), and a .gitkeep
-# so the directories exist in a fresh checkout.
-report/figures/*
-!report/figures/.gitkeep
-report/tables/*
-!report/tables/.gitkeep
+# Figures and tables are build products of analysis/run_full_analysis.py, but
+# the .pdf figures and .tex tables ARE committed so the report renders and the
+# results are visible on GitHub without running the pipeline. The .png rasters
+# are intermediates used only to refresh docs/assets/busbw_preview.png, so they
+# stay ignored.
+report/figures/*.png
 
 # OS cruft
 .DS_Store

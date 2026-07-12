@@ -166,32 +166,69 @@ def plot_latency_decomposition(df, fits, pingpong_df, out_path):
     pp_row = pp_med.sort_values("dist").head(1)
     pp_latency_s = float(pp_row["time_seconds"].iloc[0]) if not pp_row.empty else float("nan")
 
-    alpha_terms_us = [2.0 * (n - 1) * ring_alpha * 1e6 for n in n_values]
-    beta_terms_us = [
+    # The two modeled terms of Eq. (Hockney), and what was actually measured.
+    alpha_terms_us = np.array([2.0 * (n - 1) * ring_alpha * 1e6 for n in n_values])
+    beta_terms_us = np.array([
         (2.0 * (n - 1) / n * smallest_size * ring_beta * 1e6) if n > 1 else 0.0 for n in n_values
-    ]
+    ])
+
+    # Measured median time for the custom ring at the smallest swept size.
+    ring_med = med[(med["algorithm"] == "ring") & (med["message_size_bytes"] == smallest_size)]
+    measured_us = np.array([
+        float(ring_med[ring_med["num_procs"] == n]["time_seconds"].iloc[0]) * 1e6
+        if not ring_med[ring_med["num_procs"] == n].empty else np.nan
+        for n in n_values
+    ])
+
+    # The floor the ring could not beat even in principle: every one of its
+    # 2(N-1) steps paying exactly one raw point-to-point latency, no
+    # synchronization cost at all. The gap from here up to the measured bar is
+    # the rank-synchronization overhead, which is the whole point of the plot.
+    ideal_floor_us = np.array([2.0 * (n - 1) * pp_latency_s * 1e6 for n in n_values])
 
     x = np.arange(len(n_values))
-    width = 0.35
-    fig, ax = plt.subplots(figsize=(7.5, 4.6))
-    ax.bar(x - width / 2, alpha_terms_us, width, label="modeled latency term: 2(N-1) alpha",
+    width = 0.38
+    fig, ax = plt.subplots(figsize=(9.0, 5.0))
+
+    # Modeled total, stacked so the bandwidth term is visible AS negligible
+    # rather than simply absent: at 8 B it is ~1e-3 us against ~8 us of
+    # latency, which is exactly the point being made.
+    ax.bar(x - width / 2, alpha_terms_us, width,
+           label="modeled latency term: 2(N-1) alpha",
            color=ALGO_COLORS["ring"])
-    ax.bar(x + width / 2, beta_terms_us, width, label="modeled bandwidth term: 2(N-1)/N M beta",
+    ax.bar(x - width / 2, beta_terms_us, width, bottom=alpha_terms_us,
+           label=f"modeled bandwidth term: 2(N-1)/N M beta (negligible, "
+                 f"max {beta_terms_us.max():.4f} us)",
            color=ALGO_COLORS["mpi-default"])
+
+    ax.bar(x + width / 2, measured_us, width,
+           label="measured median time (custom ring)",
+           color="#4c9a2a")
+
     if np.isfinite(pp_latency_s):
-        ax.axhline(
-            pp_latency_s * 1e6, linestyle="--", color="0.2", linewidth=1.3,
-            label=f"raw pingpong one-way latency = {pp_latency_s * 1e6:.2f} us",
-        )
+        ax.plot(x, ideal_floor_us, linestyle="--", marker="o", markersize=3.5,
+                color="0.15", linewidth=1.4,
+                label=f"ideal floor: 2(N-1) x raw pingpong latency "
+                      f"({pp_latency_s * 1e6:.3f} us one-way)")
+        # Shade the measured-minus-ideal region: rank synchronization overhead.
+        ax.fill_between(x, ideal_floor_us, measured_us, color="0.5", alpha=0.18,
+                        label="rank synchronization overhead")
+
     ax.set_xticks(x)
     ax.set_xticklabels(n_values)
     ax.set_xlabel("Process count N")
     ax.set_ylabel("Time (microseconds)")
-    ax.set_title(f"Latency decomposition at the smallest message size ({human_bytes(smallest_size)})")
-    ax.legend(fontsize=8)
+    ax.set_title(
+        f"Latency decomposition at the smallest message size ({human_bytes(smallest_size)}): "
+        f"the bandwidth term vanishes, and\nthe gap between the raw point-to-point floor and the "
+        f"measured time is rank synchronization overhead"
+    )
+    ax.legend(fontsize=8, loc="upper left")
     ax.grid(True, axis="y", linestyle=":", alpha=0.6)
     fig.tight_layout()
     fig.savefig(out_path)
+    if out_path.endswith(".pdf"):
+        fig.savefig(out_path[:-4] + ".png", dpi=140)
     plt.close(fig)
 
 
