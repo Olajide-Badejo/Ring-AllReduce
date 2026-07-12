@@ -31,19 +31,19 @@ def fit_alpha_beta(n_values, size_values, time_values):
     precisely, but alpha's contribution to T only matters at small M, which
     then carries almost no weight in the unweighted sum of squares -- so
     alpha comes out noisy and can be badly biased even when R^2 looks
-    excellent (validated against this project's own synthetic dataset with
-    known ground truth: unweighted OLS was up to 17% off on alpha while
-    matching beta to within 0.3%; see docs/DESIGN_DECISIONS.md).
+    excellent.
 
     The fix used here is to weight each row by 1/T, turning the fit into a
     relative-error (not absolute-error) minimization: every message size
-    contributes comparably regardless of its absolute magnitude. This
-    assumes measurement noise has roughly constant coefficient of variation
-    across scales (true of the lognormal noise in
-    results/sample_run/generate_synthetic_sample.py, and a standard,
-    defensible assumption for wall-clock timing noise in general).
-    Empirically this recovered both alpha and beta to within 0.3% of the
-    known synthetic ground truth, vs up to 17% error on alpha unweighted.
+    contributes comparably regardless of its absolute magnitude. This assumes
+    measurement noise has roughly constant coefficient of variation across
+    scales, a standard and defensible assumption for wall-clock timing noise.
+
+    This is not asserted, it is checked. analysis/validate_fit.py recovers
+    known alpha/beta from synthetic data (the only kind that has a known
+    ground truth to recover): unweighted OLS misses alpha by up to 17% while
+    getting beta right, and the 1/T-weighted fit below recovers both to
+    within 0.4%. Run it to reproduce; see docs/DESIGN_DECISIONS.md.
 
     Args:
       n_values: array-like of process counts N for each measurement.

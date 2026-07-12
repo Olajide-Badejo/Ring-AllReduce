@@ -80,13 +80,12 @@ repeating it in every entry:
   reproduces the exact same send/receive formulas across the full N and
   count test matrix and was actually run, with all cases passing.
 - `results/sample_run/`'s data was, during this sandbox phase, synthetic:
-  generated from the Hockney cost model plus noise by
-  `generate_synthetic_sample.py`, specifically so the Python analysis
-  pipeline and the LaTeX report could be exercised and reviewed end to end
-  before any real MPI existed. That placeholder has since been replaced by
-  the real Open MPI 5.0.10 sweep (see the first entry above); the generator
-  script is retained only as the harness that validates the weighted-fit
-  procedure against a dataset with known alpha/beta.
+  generated from the Hockney cost model plus noise, specifically so the
+  Python analysis pipeline and the LaTeX report could be exercised and
+  reviewed end to end before any real MPI existed. That placeholder has since
+  been replaced by the real Open MPI 5.0.10 sweep (see the first entry above),
+  and the generator script has been deleted. `results/sample_run/` now
+  contains real measurements and nothing else.
 - CMake itself is also not installed in this sandbox, so the CMake build
   was authored to standard practice but never configured or built here;
   `g++` was used directly (bypassing CMake) to compile and, where possible,
@@ -259,18 +258,27 @@ handful of largest, slowest configurations: beta (the bandwidth term, which
 sets those large values) comes out precisely, but alpha (whose entire
 contribution to T is only visible at the smallest sizes) is comparatively
 unconstrained and can be badly biased even when R^2 looks excellent.
-Fitting a synthetic dataset with known ground truth (produced by
-`results/sample_run/generate_synthetic_sample.py`, whose true alpha/beta the
-generator sets) confirmed this directly: unweighted OLS recovered beta to
-within a fraction of a percent but missed alpha by up to 17%; weighting each
-row by 1/T (turning the fit into a relative-error, not absolute-error,
-minimization) recovered both to within 0.3% on every algorithm variant.
+This needs evidence, and evidence requires knowing the right answer in
+advance, which real measurements do not come with. So the fitter is checked
+against data synthesized from known constants, the same way a numerical solver
+is verified against a manufactured solution. That check is
+`analysis/validate_fit.py`, it writes no files, and it is reproducible: run
+`python3 analysis/validate_fit.py`. Unweighted OLS recovers beta to within a
+fraction of a percent but misses alpha by up to **17%**; weighting each row by
+1/T (turning the fit into a relative-error, not absolute-error, minimization)
+recovers both to within **0.4%**. It exits nonzero if that ever stops holding.
 `analysis/theoretical_model.py`'s `fit_alpha_beta` implements the weighted
-version, with the comparison documented in its own docstring. That
-validation is why the generator script is kept even though the committed
-dataset is now a real measurement; on the real single-node data the same
-weighted fit returns a much lower R^2, which the report attributes to
-shared-memory cache effects rather than to the fitting procedure.
+version.
+
+Two notes on doing this honestly. The synthetic data exists *only* to validate
+the fitter; it is never analyzed, plotted, or reported, and
+`results/sample_run/` contains real Open MPI measurements and nothing else.
+And each synthetic point is the median of many noisy repetitions, matching what
+`apps/benchmark.cpp` actually reports and what the pipeline actually fits.
+Fitting a single raw draw per point instead would feed the fitter noisier input
+than it ever sees in production and would understate how well it does (it did,
+when first written: the weighted fit's worst error looked like 1.3% rather than
+0.35%).
 
 ## Summary table reported at N = 16, not averaged across N
 

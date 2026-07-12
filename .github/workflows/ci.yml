@@ -60,5 +60,14 @@ jobs:
         run: |
           cd analysis
           python3 -c "import load_results, theoretical_model, generate_plots, generate_tables"
+
+      # The report claims the 1/T-weighted fit recovers alpha and beta where an
+      # unweighted fit misses alpha by up to 17%. This proves it on every push
+      # rather than leaving it as an assertion: the script recovers known
+      # constants from synthesized data (the only kind with a ground truth to
+      # recover) and exits nonzero if the weighted fit ever stops working.
+      - name: Validate the alpha/beta fitting procedure
+        run: python3 analysis/validate_fit.py
+
       - name: Run the pipeline against the committed sample dataset
         run: python3 analysis/run_full_analysis.py

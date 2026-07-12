@@ -61,7 +61,12 @@ python3 analysis/run_full_analysis.py \
 ```
 
 The sweep scripts write to `results/local_run/` (gitignored), never back into
-this directory. `generate_synthetic_sample.py` here is **not** the source of
-these CSVs: it is retained only as the harness that produces a dataset with
-known `alpha`/`beta`, used to validate the weighted-least-squares fitting
-procedure in `analysis/theoretical_model.py` (see `docs/DESIGN_DECISIONS.md`).
+this directory. This directory contains real measurements and nothing else:
+there is no synthetic data anywhere in it, and no script here that could
+overwrite the CSVs.
+
+(The fitting procedure in `analysis/theoretical_model.py` is separately
+validated against data synthesized from known constants, since proving a
+fitter recovers the right answer requires knowing that answer in advance.
+That check lives in `analysis/validate_fit.py`, writes no files, and never
+touches this directory. See `docs/DESIGN_DECISIONS.md`.)
