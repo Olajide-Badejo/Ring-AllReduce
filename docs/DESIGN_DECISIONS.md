@@ -6,9 +6,34 @@ this project was built from asked for exactly this: where something was not
 fully pinned down, make the industry-standard choice, implement it, and
 record why here rather than silently picking one option.
 
-## Sandbox constraints (read this one first)
+## Real MPI verification on a local Windows desktop
 
-This repository was built in a sandbox with **no MPI installation and no
+On 2026-07-12 this project was built and tested against a real local MPI
+installation, not a declaration-only substitute:
+
+- Microsoft MPI Runtime 10.1.12498.18 launched the worker processes.
+- MSYS2's UCRT64 `mingw-w64-ucrt-x86_64-msmpi` development package supplied
+  `mpicxx`, `mpi.h`, and the link library for the existing GCC 15.2 toolchain.
+- CMake configured successfully with that `mpicxx`, and a warnings-as-errors
+  build completed successfully.
+- `ctest --test-dir build-real --output-on-failure` passed all 17 tests,
+  including real multi-process correctness and edge-case runs at N = 1, 2,
+  3, 4, 5, 7, 8, and 16.
+- The standalone `correctness_check` passed at N = 8. A two-rank smoke run
+  of `benchmark` and `pingpong` wrote real local measurements under
+  `results/local_run/`; those gitignored files are intentionally separate
+  from the synthetic committed sample dataset.
+
+Microsoft MPI validates the portable point-to-point implementation and the
+default vendor comparison. It does not provide Open MPI's `coll/tuned` MCA
+controls, so the forced `mpi-ring` vendor comparison remains an Open MPI
+specific experiment. `tests/CMakeLists.txt` consequently adds Open MPI's
+root and oversubscription launcher flags only on Unix, where the CI uses
+Open MPI, and uses native Microsoft MPI syntax on Windows.
+
+## Initial sandbox constraints (historical)
+
+The initial repository implementation was developed in a sandbox with **no MPI installation and no
 network access to install one** (`apt-get install` and `pip install` both
 fail with no route to a package index; there is no local package cache with
 OpenMPI, MPICH, or CMake in it either). This is the root cause behind most of
@@ -41,9 +66,9 @@ repeating it in every entry:
   `g++` was used directly (bypassing CMake) to compile and, where possible,
   run individual translation units instead.
 
-None of this should matter once this repository is built on a machine with a
-real MPI installation. It is documented here so that distinction, real
-versus validated-by-substitute, is never ambiguous to a future reader.
+This history remains useful because it explains why the committed sample
+dataset is synthetic. The real Windows MPI verification above supersedes the
+old limitation for the current local development environment.
 
 ## C++ standard: C++20, not C++17
 

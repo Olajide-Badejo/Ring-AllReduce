@@ -41,14 +41,13 @@ separated and each one quantified, not just asserted.
 **Read this before citing any number from this repository:** the dataset
 currently committed at `results/sample_run/` is **synthetic**, generated
 from the cost model above plus noise, not measured on real hardware. It
-exists so the analysis pipeline and the report could be built and reviewed
-end to end in a sandbox with no MPI installation and no network access to
-get one. `results/sample_run/README.md` and
+exists so the analysis pipeline and the report can be built and reviewed
+end to end without MPI hardware. `results/sample_run/README.md` and
 `report/sections/04_experimental_setup.tex` both say so prominently, and
 `docs/DESIGN_DECISIONS.md` documents exactly what could, and could not, be
-verified in that environment. Running `scripts/run_local_sweep.sh` on a
-machine with a working MPI installation and then `make report` replaces
-every number in the report with a real one, using the identical
+verified by the sample data. A real Microsoft MPI validation is recorded in
+the design log, and running either local sweep script followed by `make
+report` replaces every report number with real measurements using the same
 methodology.
 
 ![Achieved bus bandwidth vs message size](docs/assets/busbw_preview.png)
@@ -80,6 +79,27 @@ To run a real benchmark sweep and rebuild the report from it instead of the
 synthetic sample, see `docs/BENCHMARKING.md`; the short version is
 `make bench` (opt-in, actually launches `mpirun` repeatedly) followed by
 `make report` again.
+
+## Windows desktop with Microsoft MPI
+
+The project has been built and tested locally with the Microsoft MPI runtime
+and the MSYS2 UCRT64 MPI development package. This route runs the custom
+ring and Microsoft MPI's default `MPI_Allreduce`; it cannot force Open MPI's
+vendor ring algorithm, so the `mpi-ring` comparison remains specific to the
+Open MPI workflow.
+
+```powershell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+cmake -S . -B build-real -G "MinGW Makefiles" `
+  -DMPI_CXX_COMPILER=C:\msys64\ucrt64\bin\mpicxx.exe `
+  -DRING_ALLREDUCE_WARNINGS_AS_ERRORS=ON
+cmake --build build-real -j 8
+ctest --test-dir build-real --output-on-failure
+.\scripts\run_local_sweep.ps1 -Quick -BuildDir build-real
+```
+
+See `docs/BENCHMARKING.md` for the full Windows command and the separate
+Open MPI workflow.
 
 ## Directory overview
 

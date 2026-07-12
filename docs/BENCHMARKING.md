@@ -35,13 +35,42 @@ alone, with no prior `make bench`, uses the committed
 directory's own README.md) and will compile in well under a minute since it
 involves no MPI at all.
 
+## Windows desktop using Microsoft MPI
+
+This local desktop has a real Microsoft MPI Runtime 10.1 installation and
+MSYS2 UCRT64's `mingw-w64-ucrt-x86_64-msmpi` development package. The
+following commands build and test against that real MPI implementation:
+
+```powershell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+cmake -S . -B build-real -G "MinGW Makefiles" `
+  -DMPI_CXX_COMPILER=C:\msys64\ucrt64\bin\mpicxx.exe `
+  -DRING_ALLREDUCE_WARNINGS_AS_ERRORS=ON
+cmake --build build-real -j 8
+ctest --test-dir build-real --output-on-failure
+```
+
+Run a real local sweep with the native launcher wrapper:
+
+```powershell
+.\scripts\run_local_sweep.ps1 -Quick -BuildDir build-real
+python analysis\run_full_analysis.py `
+  --results results\local_run\results.csv `
+  --pingpong results\local_run\pingpong.csv `
+  --outdir report
+```
+
+`run_local_sweep.ps1` measures the custom ring and Microsoft MPI's default
+`MPI_Allreduce` selection. Microsoft MPI has no Open MPI `coll/tuned` MCA
+ring selector, so it deliberately does not emit `mpi-ring` rows. Use the
+Open MPI workflow below when the forced vendor-ring comparison is required.
+
 ## This machine's Open MPI version and ring algorithm ID
 
-**Not yet filled in.** This repository was built in a sandbox with no MPI
-installation and no network access to install one (see
-`docs/DESIGN_DECISIONS.md`), so `scripts/check_mpi_algorithms.sh` has never
-actually been run against a real Open MPI build. Whoever runs the first
-real sweep should replace this section with:
+**Not yet filled in.** The local Windows verification uses Microsoft MPI,
+not Open MPI, so `scripts/check_mpi_algorithms.sh` has not run against an
+Open MPI build here. Whoever runs the first Open MPI sweep should replace
+this section with:
 
 ```
 Open MPI version: <output of `ompi_info --version`>
@@ -57,14 +86,10 @@ from a different machine's run without re-checking it.
 
 This project's build specification names an Intel Core i7-14700K
 workstation (32 GB DDR5, an RTX 5070 that this CPU-only project does not
-use) as the intended benchmarking machine. The pipeline itself
-(`analysis/`, the LaTeX report build) was developed and exercised in a
-sandboxed Linux container with a single virtualized CPU core and roughly
-3.9 GB of RAM, which has no bearing on real ring-allreduce performance and
-is mentioned only because Section "A note on the dataset behind this
-report" in `report/sections/04_experimental_setup.tex` (and this file's
-section above) both depend on that distinction being clear: the pipeline
-was validated there; no benchmark numbers were ever measured there.
+use) as the intended benchmarking machine. The real Microsoft MPI smoke
+measurements described above were collected locally on this desktop, not in
+a sandbox. They cover only N = 2 and 8 B through 64 KiB, so they validate
+the execution path but are not a replacement for the full benchmark grid.
 
 ## Statistical methodology
 
