@@ -1,5 +1,4 @@
-<!-- Replace YOUR_USERNAME below once this is pushed to your own GitHub repo. -->
-[![CI](https://github.com/YOUR_USERNAME/ring-allreduce/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/ring-allreduce/actions/workflows/ci.yml)
+[![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 # ring-allreduce

@@ -107,6 +107,27 @@ rather than a plain function-local static is pure defensiveness for a
 hypothetical multi-threaded-per-rank caller; this project's own code is one
 OS thread per rank.
 
+## Zero-count MPI buffers use a non-null scratch address
+
+The public API deliberately permits `allreduce(nullptr, 0, comm)`, and an
+empty `MPI_Isend` or `MPI_Irecv` is a required part of every ring step even
+when a chunk has no elements. MPI ignores the buffer for a zero-count
+operation, but forming `nullptr + 0` is undefined behavior in C++. The
+thread-local scratch buffer therefore retains at least one element and is
+used as the message address for the zero-count case. This preserves both
+the documented API and the required step synchronization without relying on
+implementation-specific behavior of an empty `std::vector`.
+
+## Benchmark repetitions restore their rank-local input
+
+Allreduce mutates its input buffer in place. The benchmark restores each
+rank's deterministic input immediately before the barrier that precedes
+every warmup and timed iteration, so initialization is excluded from the
+timed region while every measurement is an independent SUM operation.
+Without this reset, repeated iterations would reduce the previous result
+again and could overflow or saturate floating-point values during a long
+small-message run.
+
 ## No MPI big-count ("_c") API support
 
 MPI point-to-point calls take an `int` count. A single chunk's size is

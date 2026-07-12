@@ -183,6 +183,14 @@ TimingStats run_one_config(const std::string& algorithm, std::size_t count,
   std::vector<T> buf(std::max<std::size_t>(count, 1), static_cast<T>(rank + 1));
   const MPI_Datatype dtype = std::is_same<T, float>::value ? MPI_FLOAT : MPI_DOUBLE;
 
+  // An allreduce overwrites its input. Restore the same rank-local input
+  // before every warmup and timed repetition so each sample measures one
+  // independent collective, rather than repeatedly summing a prior result
+  // until floating-point overflow or saturation changes the workload.
+  auto reset_input = [&]() {
+    std::fill_n(buf.data(), count, static_cast<T>(rank + 1));
+  };
+
   auto do_op = [&]() {
     if (algorithm == "ring") {
       ring_allreduce::allreduce<T, ring_allreduce::SumOp>(count == 0 ? nullptr : buf.data(),
@@ -195,6 +203,7 @@ TimingStats run_one_config(const std::string& algorithm, std::size_t count,
   };
 
   for (int i = 0; i < cfg.warmup_iterations; ++i) {
+    reset_input();
     MPI_Barrier(comm);
     do_op();
   }
@@ -206,6 +215,7 @@ TimingStats run_one_config(const std::string& algorithm, std::size_t count,
   const int min_reps = 3;
 
   for (int rep = 0; rep < cfg.max_iterations; ++rep) {
+    reset_input();
     MPI_Barrier(comm);
     const double t0 = MPI_Wtime();
     do_op();

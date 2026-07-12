@@ -144,7 +144,14 @@ void allreduce(T* buf, std::size_t count, MPI_Comm comm) {
   std::size_t max_chunk = 0;
   for (const std::size_t s : layout.sizes) max_chunk = std::max(max_chunk, s);
   std::vector<T>& tmp = detail::scratch_buffer<T>();
-  if (tmp.size() < max_chunk) tmp.resize(max_chunk);
+  // MPI ignores the buffer argument for a zero-count operation, but C++
+  // still must not form `nullptr + 0` while preparing that argument. Keep a
+  // one-element scratch allocation available as a safe, non-null dummy for
+  // the legal `buf == nullptr, count == 0` API case documented above.
+  if (tmp.size() < std::max<std::size_t>(max_chunk, 1)) {
+    tmp.resize(std::max<std::size_t>(max_chunk, 1));
+  }
+  T* const mpi_buffer = count == 0 ? tmp.data() : buf;
 
   // Distinct tags per phase: not required for correctness in *this*
   // strictly-synchronous (Waitall every step) implementation, since at most
@@ -169,14 +176,14 @@ void allreduce(T* buf, std::size_t count, MPI_Comm comm) {
     const std::size_t recv_size = layout.sizes[static_cast<std::size_t>(recv_idx)];
 
     MPI_Request requests[2];
-    MPI_Isend(buf + send_off, detail::chunk_count_to_mpi_int(send_size), dtype, next,
+    MPI_Isend(mpi_buffer + send_off, detail::chunk_count_to_mpi_int(send_size), dtype, next,
                kReduceScatterTag, comm, &requests[0]);
     MPI_Irecv(tmp.data(), detail::chunk_count_to_mpi_int(recv_size), dtype, prev,
                kReduceScatterTag, comm, &requests[1]);
     MPI_Waitall(2, requests, MPI_STATUSES_IGNORE);
 
     for (std::size_t i = 0; i < recv_size; ++i) {
-      buf[recv_off + i] = op(buf[recv_off + i], tmp[i]);
+      mpi_buffer[recv_off + i] = op(mpi_buffer[recv_off + i], tmp[i]);
     }
   }
 
@@ -196,9 +203,9 @@ void allreduce(T* buf, std::size_t count, MPI_Comm comm) {
     const std::size_t recv_size = layout.sizes[static_cast<std::size_t>(recv_idx)];
 
     MPI_Request requests[2];
-    MPI_Isend(buf + send_off, detail::chunk_count_to_mpi_int(send_size), dtype, next,
+    MPI_Isend(mpi_buffer + send_off, detail::chunk_count_to_mpi_int(send_size), dtype, next,
                kAllGatherTag, comm, &requests[0]);
-    MPI_Irecv(buf + recv_off, detail::chunk_count_to_mpi_int(recv_size), dtype, prev,
+    MPI_Irecv(mpi_buffer + recv_off, detail::chunk_count_to_mpi_int(recv_size), dtype, prev,
                kAllGatherTag, comm, &requests[1]);
     MPI_Waitall(2, requests, MPI_STATUSES_IGNORE);
   }
