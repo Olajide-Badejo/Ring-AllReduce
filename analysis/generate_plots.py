@@ -81,7 +81,10 @@ def plot_busbw_vs_size(df, fits, out_path, n_subset=(2, 4, 8, 16)):
         ax.set_xlabel("Message size (bytes)")
         ax.set_title(ALGO_LABELS.get(algo, algo))
         ax.grid(True, which="both", linestyle=":", linewidth=0.5, alpha=0.6)
-        ax.legend(fontsize=7, loc="lower right")
+        # Upper left: the curves all start near zero at the small-message end,
+        # so that corner is empty. Lower right sits on top of the large-N
+        # curve tails and hides them.
+        ax.legend(fontsize=7, loc="upper left")
 
     axes[0].set_ylabel("Bus bandwidth, busbw (GB/s)")
     fig.suptitle("Achieved bus bandwidth vs message size, by process count")
