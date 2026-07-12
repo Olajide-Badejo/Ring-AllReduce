@@ -2,6 +2,13 @@
 
 BUILD_DIR := build
 
+# Python interpreter for the analysis pipeline. Defaults to `python3`, which
+# is correct on Linux and in CI (the project's canonical environment). On a
+# Windows desktop the bare `python3` on PATH is often the MSYS/UCRT build with
+# no pip and no numpy; there, run `make PYTHON=py report` so the Python
+# launcher finds the real CPython install with the analysis dependencies.
+PYTHON ?= python3
+
 help:
 	@echo "Targets:"
 	@echo "  build    configure + build (CMake, warnings as errors)"
@@ -33,12 +40,12 @@ bench: build
 analyze:
 	@if [ -f results/local_run/results.csv ] && [ -f results/local_run/pingpong.csv ]; then \
 		echo "== using results/local_run/ (a real sweep) =="; \
-		python3 analysis/run_full_analysis.py \
+		$(PYTHON) analysis/run_full_analysis.py \
 			--results results/local_run/results.csv \
 			--pingpong results/local_run/pingpong.csv; \
 	else \
-		echo "== no real sweep found in results/local_run/; using results/sample_run/ (SYNTHETIC, see results/sample_run/README.md) =="; \
-		python3 analysis/run_full_analysis.py; \
+		echo "== no real sweep found in results/local_run/; using committed results/sample_run/ (see results/sample_run/README.md) =="; \
+		$(PYTHON) analysis/run_full_analysis.py; \
 	fi
 
 report: analyze
