@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings even when checked out on Windows.
+# A CRLF checkout makes bash fail under Linux/WSL with errors like
+# "set: pipefail: invalid option name", which breaks the sweep scripts and
+# anything else running them on a real MPI machine.
+*.sh text eol=lf
+*.sbatch text eol=lf

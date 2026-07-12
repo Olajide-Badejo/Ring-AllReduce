@@ -49,7 +49,12 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 RESULTS_CSV="$OUTPUT_DIR/results.csv"
-rm -f "$RESULTS_CSV"
+PINGPONG_CSV="$OUTPUT_DIR/pingpong.csv"
+# Both binaries APPEND to their CSV, so stale output from a previous sweep
+# must be cleared or the new rows are silently concatenated onto the old
+# ones (which quietly mixes two different machines' or MPI stacks' numbers
+# into one file). Remove both, not just the results file.
+rm -f "$RESULTS_CSV" "$PINGPONG_CSV"
 
 echo "== ring-allreduce local sweep: N in {${PROC_COUNTS[*]}}, dtype=$DTYPE, ring algo id=$RING_ALGO_ID =="
 echo "== output: $RESULTS_CSV =="
@@ -66,10 +71,10 @@ for N in "${PROC_COUNTS[@]}"; do
 done
 
 echo "--- pingpong (N=2) ---"
-mpirun --allow-run-as-root --oversubscribe -np 2 "$PINGPONG" --output "$OUTPUT_DIR/pingpong.csv"
+mpirun --allow-run-as-root --oversubscribe -np 2 "$PINGPONG" --output "$PINGPONG_CSV"
 
 echo
 echo "Done."
 echo "  $RESULTS_CSV"
-echo "  $OUTPUT_DIR/pingpong.csv"
-echo "Next: python3 analysis/run_full_analysis.py --results $RESULTS_CSV --pingpong $OUTPUT_DIR/pingpong.csv --outdir report"
+echo "  $PINGPONG_CSV"
+echo "Next: python3 analysis/run_full_analysis.py --results $RESULTS_CSV --pingpong $PINGPONG_CSV --outdir report"

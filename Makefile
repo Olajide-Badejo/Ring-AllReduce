@@ -33,7 +33,7 @@ bench: build
 
 # Prefers a real sweep's output (results/local_run/, produced by `make
 # bench`) if one exists; otherwise falls back to the committed
-# results/sample_run/ dataset, which is a real single-node Microsoft MPI
+# results/sample_run/ dataset, which is a real single-node Open MPI 5.0.10
 # measurement (see its own README.md for provenance and caveats). Either way
 # this involves no MPI at all, only Python, so it works on a fresh checkout
 # with no benchmarking hardware.

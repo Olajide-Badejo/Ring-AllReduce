@@ -6,46 +6,55 @@ this project was built from asked for exactly this: where something was not
 fully pinned down, make the industry-standard choice, implement it, and
 record why here rather than silently picking one option.
 
-## Real MPI verification on a local Windows desktop
+## Real Open MPI measurement: WSL2, not Microsoft MPI
 
-On 2026-07-12 this project was built and tested against a real local MPI
-installation, not a declaration-only substitute:
+On 2026-07-12 this project was built, tested, and benchmarked against a real
+Open MPI 5.0.10 installation on the target i7-14700K workstation. The
+committed dataset at `results/sample_run/` is that measurement.
 
-- Microsoft MPI Runtime 10.1.12498.18 launched the worker processes.
-- MSYS2's UCRT64 `mingw-w64-ucrt-x86_64-msmpi` development package supplied
-  `mpicxx`, `mpi.h`, and the link library for the existing GCC 15.2 toolchain.
-- CMake configured successfully with that `mpicxx`, and a warnings-as-errors
-  build completed successfully.
-- `ctest --test-dir build-real --output-on-failure` passed all 17 tests,
-  including real multi-process correctness and edge-case runs at N = 1, 2,
-  3, 4, 5, 7, 8, and 16.
-- The standalone `correctness_check` passed at N = 8. A full `--quick`
-  sweep of `benchmark` (N in {2, 4, 8, 16}, 8 B through 128 MiB) and a
-  `pingpong` latency sweep were then run, writing real measurements to
-  `results/local_run/`.
+**Why WSL2 rather than the Windows-native MPI.** The workstation runs
+Windows, and the obvious route was Microsoft MPI (which does work: an earlier
+iteration built cleanly against it, passed all 17 ctest cases, and produced a
+real two-variant sweep). It was abandoned because Microsoft MPI has **no
+equivalent of Open MPI's `coll/tuned` MCA controls**, so it cannot force
+`MPI_Allreduce` to run the vendor's own ring. That forced ring-versus-ring
+run is not a nice-to-have: it is the single experiment that separates "my
+implementation is slow" from "the ring algorithm is slow," which is the
+report's central claim. Without it the benchmark can only compare the custom
+ring against a vendor default that is silently running a different, lower-step
+algorithm, which measures algorithm choice and implementation quality mixed
+together and cannot tell them apart. There is no native Open MPI for Windows,
+so WSL2 (Ubuntu, same physical CPU) was the way to get a spec-compliant
+three-variant run. It was worth the setup.
 
-**The committed sample dataset is now real, not synthetic.** That
-`--quick` sweep's output replaced the previous synthetic placeholder at
-`results/sample_run/`, so `make report` on a clean checkout now builds
-entirely from real single-node Microsoft MPI measurements. This was the
-right call because the synthetic-data caveat was the repository's biggest
-credibility weakness for the resume claims it substantiates, and the real
-data tells a stronger story than the synthetic ideal did: a clean crossover
-where the custom ring loses to the vendor default below a few kilobytes
-(more latency-bound steps) and wins above it (bandwidth optimality). Two
-limitations come with it and are documented wherever the data is cited: the
-run is single-node (shared-memory transport, so bus bandwidth peaks in the
-L3-cache-resident size range and the single-slope Hockney fit is only a
-loose description, R^2 around 0.3 to 0.4), and it has two algorithm variants
-rather than three.
+What the real run covers: Open MPI 5.0.10, ring algorithm id 4 (read from
+`ompi_info`, not assumed), all three variants (`ring`, `mpi-default`,
+forced `mpi-ring`), every N from 2 to 16 including non-power-of-two, 8 B
+through 128 MiB, on 28 hardware threads so nothing is oversubscribed. All 17
+ctest cases pass against this Open MPI.
 
-Microsoft MPI validates the portable point-to-point implementation and the
-default vendor comparison. It does not provide Open MPI's `coll/tuned` MCA
-controls, so the forced `mpi-ring` vendor comparison remains an Open MPI
-specific experiment left for a cluster sweep. `tests/CMakeLists.txt`
-consequently adds Open MPI's root and oversubscription launcher flags only
-on Unix, where the CI uses Open MPI, and uses native Microsoft MPI syntax on
-Windows.
+**The payoff.** The custom ring is ~5x slower than Open MPI's default at 8 B
+(11.55 us vs 2.26 us at N=16), which alone reads as an implementation failure.
+Forcing Open MPI to run its own ring shows it is just as slow (11.97 us vs
+this project's 11.08 us at 64 B, within ~8%), proving the gap is the ring
+algorithm's `2(N-1)` step count, not the code. Above 64 KiB the custom ring
+beats the vendor's own ring. That is a far more defensible result than either
+the synthetic data or the Microsoft MPI two-variant run could support.
+
+**Remaining limitation:** single node, so the transport is shared memory, not
+a fabric. Bus bandwidth therefore peaks in the L3-cache-resident range and the
+single-slope Hockney fit is loose (R^2 ~0.28 to 0.33). Documented wherever
+the data is cited; a multi-node sweep is the top follow-up.
+
+## Line endings: `.gitattributes` forces LF on shell scripts
+
+Discovered the hard way. Git's `autocrlf` gives a Windows checkout CRLF line
+endings, and the repo blob stores LF, so CI (Linux) was always fine. But
+running the sweep scripts from a Windows working tree inside WSL fails with
+`set: pipefail: invalid option name`, because bash sees the trailing `\r` as
+part of the option name. `.gitattributes` now pins `*.sh` and `*.sbatch` to
+`eol=lf` so they stay runnable on Linux/WSL regardless of where they were
+checked out.
 
 ## Initial sandbox constraints (historical)
 
@@ -75,7 +84,7 @@ repeating it in every entry:
   `generate_synthetic_sample.py`, specifically so the Python analysis
   pipeline and the LaTeX report could be exercised and reviewed end to end
   before any real MPI existed. That placeholder has since been replaced by
-  the real Microsoft MPI sweep (see the first entry above); the generator
+  the real Open MPI 5.0.10 sweep (see the first entry above); the generator
   script is retained only as the harness that validates the weighted-fit
   procedure against a dataset with known alpha/beta.
 - CMake itself is also not installed in this sandbox, so the CMake build

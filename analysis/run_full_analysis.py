@@ -12,7 +12,7 @@ Usage:
       --pingpong path/to/pingpong.csv --outdir report
 
 With no arguments, analyzes the committed results/sample_run/ dataset (real
-single-node Microsoft MPI measurements; see that directory's README.md for
+single-node Open MPI 5.0.10 measurements; see that directory's README.md for
 provenance and limitations) and writes into report/.
 """
 

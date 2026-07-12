@@ -39,22 +39,29 @@ from measured data (weighted least squares, not an assumed constant; see
 separated and each one quantified, not just asserted.
 
 **About the committed numbers:** the dataset at `results/sample_run/` is a
-**real measurement**, collected on an i7-14700K under Microsoft MPI (see
+**real measurement** against **Open MPI 5.0.10** on an i7-14700K: all three
+algorithm variants, every process count N = 2..16 including the
+non-power-of-two ones, across 8 B to 128 MiB (see
 `results/sample_run/README.md` for full provenance). Every figure and table
-in `report/main.pdf` is derived from it. Two honest caveats come with the
-environment: it is a single-node run (shared-memory transport, so bus
-bandwidth peaks in the L3-cache-resident size range and a single-slope
-Hockney fit only loosely describes it), and Microsoft MPI cannot force a
-vendor ring, so the data compares the custom ring against the vendor's
-default `MPI_Allreduce` only. The headline result is a clean crossover: the
-ring loses to the vendor default below a few kilobytes (more latency-bound
-steps) and wins above it by up to a factor of two (bandwidth optimality).
-Running the Open MPI sweep on a cluster followed by `make report` adds the
-forced ring-versus-ring variant and the full 2..16 process-count grid using
-the identical methodology.
+in `report/main.pdf` derives from it.
+
+The headline result comes from benchmarking `MPI_Allreduce` **two ways**:
+as it selects algorithms by default, and forced via MCA parameters to run
+Open MPI's *own ring*. At 8 B and N=16 the from-scratch ring takes 11.55 us
+against the default's 2.26 us, roughly 5x slower, which in isolation looks
+like an indictment of the implementation. But Open MPI's own ring, forced,
+is just as slow (11.97 us vs this project's 11.08 us at 64 B, within ~8%),
+which shows the gap is the price of the ring **algorithm**'s `2(N-1)` step
+count, not a deficiency of this code. Above 64 KiB the custom ring is
+actually the faster of the two rings, finishing 16 MiB at N=16 in 19.2 ms
+against the vendor ring's 24.6 ms.
+
+The one caveat: it is a single-node run (shared-memory transport), so bus
+bandwidth peaks in the L3-cache-resident range and a single-slope Hockney
+fit only loosely describes it (R^2 ~0.3). The report says so directly.
 
 ![Achieved bus bandwidth vs message size](docs/assets/busbw_preview.png)
-*Real single-node Microsoft MPI measurements, rendered by
+*Real single-node Open MPI 5.0.10 measurements, rendered by
 `analysis/generate_plots.py`. The README preview refreshes automatically as
 part of `make report`.*
 
@@ -81,30 +88,28 @@ make report
 To run your own benchmark sweep and rebuild the report from it instead of
 the committed sample, see `docs/BENCHMARKING.md`; the short version is
 `make bench` (opt-in, actually launches `mpirun` repeatedly) followed by
-`make report` again. On an Open MPI cluster this also adds the forced
-ring-versus-ring variant that a single-node Microsoft MPI run cannot
-produce.
+`make report` again. Run `scripts/check_mpi_algorithms.sh` first to confirm
+your Open MPI's ring algorithm ID: it has moved across releases, so do not
+assume 4.
 
-## Windows desktop with Microsoft MPI
+## On Windows
 
-The project has been built and tested locally with the Microsoft MPI runtime
-and the MSYS2 UCRT64 MPI development package. This route runs the custom
-ring and Microsoft MPI's default `MPI_Allreduce`; it cannot force Open MPI's
-vendor ring algorithm, so the `mpi-ring` comparison remains specific to the
-Open MPI workflow.
+There is no native Open MPI for Windows, and Microsoft MPI has no
+`coll/tuned` MCA controls, so it cannot produce the forced `mpi-ring`
+variant the report's central comparison depends on. Use WSL2, which is how
+the committed dataset was measured on this workstation:
 
-```powershell
-$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
-cmake -S . -B build-real -G "MinGW Makefiles" `
-  -DMPI_CXX_COMPILER=C:\msys64\ucrt64\bin\mpicxx.exe `
-  -DRING_ALLREDUCE_WARNINGS_AS_ERRORS=ON
-cmake --build build-real -j 8
-ctest --test-dir build-real --output-on-failure
-.\scripts\run_local_sweep.ps1 -Quick -BuildDir build-real
+```bash
+wsl --install                      # elevated, one time; then reboot
+sudo apt-get update
+sudo apt-get install -y openmpi-bin libopenmpi-dev cmake build-essential
 ```
 
-See `docs/BENCHMARKING.md` for the full Windows command and the separate
-Open MPI workflow.
+Then follow the quickstart above inside WSL. Build on the WSL native
+filesystem rather than under `/mnt/c` (CMake fails with "Operation not
+permitted" on the Windows drive mount). To build the PDF or run the analysis
+from Windows itself, use `make PYTHON=py report`, since the bare `python3`
+on a Windows PATH is often the MSYS build with no numpy.
 
 ## Directory overview
 
@@ -116,7 +121,7 @@ tests/                   unit tests (chunking) and MPI correctness/edge-case tes
 analysis/                Python: fits the cost model, generates figures and tables
 report/                  LaTeX source for the write-up (report/main.pdf is a build output)
 scripts/                 sweep drivers, MPI algorithm introspection, env setup
-results/sample_run/      real single-node Microsoft MPI dataset -- read its README.md
+results/sample_run/      real single-node Open MPI 5.0.10 dataset -- read its README.md
 docs/                    architecture, algorithm derivation, benchmarking, design log
 ```
 
