@@ -38,22 +38,25 @@ from measured data (weighted least squares, not an assumed constant; see
 `report/sections/06_discussion.tex` is where the two bottlenecks get
 separated and each one quantified, not just asserted.
 
-**Read this before citing any number from this repository:** the dataset
-currently committed at `results/sample_run/` is **synthetic**, generated
-from the cost model above plus noise, not measured on real hardware. It
-exists so the analysis pipeline and the report can be built and reviewed
-end to end without MPI hardware. `results/sample_run/README.md` and
-`report/sections/04_experimental_setup.tex` both say so prominently, and
-`docs/DESIGN_DECISIONS.md` documents exactly what could, and could not, be
-verified by the sample data. A real Microsoft MPI validation is recorded in
-the design log, and running either local sweep script followed by `make
-report` replaces every report number with real measurements using the same
-methodology.
+**About the committed numbers:** the dataset at `results/sample_run/` is a
+**real measurement**, collected on an i7-14700K under Microsoft MPI (see
+`results/sample_run/README.md` for full provenance). Every figure and table
+in `report/main.pdf` is derived from it. Two honest caveats come with the
+environment: it is a single-node run (shared-memory transport, so bus
+bandwidth peaks in the L3-cache-resident size range and a single-slope
+Hockney fit only loosely describes it), and Microsoft MPI cannot force a
+vendor ring, so the data compares the custom ring against the vendor's
+default `MPI_Allreduce` only. The headline result is a clean crossover: the
+ring loses to the vendor default below a few kilobytes (more latency-bound
+steps) and wins above it by up to a factor of two (bandwidth optimality).
+Running the Open MPI sweep on a cluster followed by `make report` adds the
+forced ring-versus-ring variant and the full 2..16 process-count grid using
+the identical methodology.
 
 ![Achieved bus bandwidth vs message size](docs/assets/busbw_preview.png)
-*Generated from the current (synthetic, see above) sample dataset by
-`analysis/generate_plots.py`. Regenerates automatically as part of `make
-report` once real data exists.*
+*Real single-node Microsoft MPI measurements, rendered by
+`analysis/generate_plots.py`. The README preview refreshes automatically as
+part of `make report`.*
 
 ## Quickstart
 
@@ -75,10 +78,12 @@ mpirun --allow-run-as-root --oversubscribe -np 8 ./build/apps/correctness_check
 make report
 ```
 
-To run a real benchmark sweep and rebuild the report from it instead of the
-synthetic sample, see `docs/BENCHMARKING.md`; the short version is
+To run your own benchmark sweep and rebuild the report from it instead of
+the committed sample, see `docs/BENCHMARKING.md`; the short version is
 `make bench` (opt-in, actually launches `mpirun` repeatedly) followed by
-`make report` again.
+`make report` again. On an Open MPI cluster this also adds the forced
+ring-versus-ring variant that a single-node Microsoft MPI run cannot
+produce.
 
 ## Windows desktop with Microsoft MPI
 
@@ -111,7 +116,7 @@ tests/                   unit tests (chunking) and MPI correctness/edge-case tes
 analysis/                Python: fits the cost model, generates figures and tables
 report/                  LaTeX source for the write-up (report/main.pdf is a build output)
 scripts/                 sweep drivers, MPI algorithm introspection, env setup
-results/sample_run/      SYNTHETIC placeholder dataset -- read its README.md
+results/sample_run/      real single-node Microsoft MPI dataset -- read its README.md
 docs/                    architecture, algorithm derivation, benchmarking, design log
 ```
 

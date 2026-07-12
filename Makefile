@@ -26,9 +26,10 @@ bench: build
 
 # Prefers a real sweep's output (results/local_run/, produced by `make
 # bench`) if one exists; otherwise falls back to the committed
-# results/sample_run/ dataset, which is SYNTHETIC (see its own README.md).
-# Either way this involves no MPI at all, only Python, so it works on a
-# fresh checkout with no benchmarking hardware.
+# results/sample_run/ dataset, which is a real single-node Microsoft MPI
+# measurement (see its own README.md for provenance and caveats). Either way
+# this involves no MPI at all, only Python, so it works on a fresh checkout
+# with no benchmarking hardware.
 analyze:
 	@if [ -f results/local_run/results.csv ] && [ -f results/local_run/pingpong.csv ]; then \
 		echo "== using results/local_run/ (a real sweep) =="; \

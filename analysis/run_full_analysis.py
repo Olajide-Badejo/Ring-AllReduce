@@ -11,13 +11,14 @@ Usage:
   python3 analysis/run_full_analysis.py --results path/to/results.csv \\
       --pingpong path/to/pingpong.csv --outdir report
 
-With no arguments, analyzes the committed results/sample_run/ dataset (see
-that directory's README.md before citing anything from that default run --
-it is synthetic, not a real hardware measurement) and writes into report/.
+With no arguments, analyzes the committed results/sample_run/ dataset (real
+single-node Microsoft MPI measurements; see that directory's README.md for
+provenance and limitations) and writes into report/.
 """
 
 import argparse
 import os
+import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -67,6 +68,14 @@ def main():
     print("generating tables...")
     summary_n = generate_all_tables(df, fits, tables_dir)
     print(f"  summary table reported at N={summary_n}")
+
+    # Refresh the committed README preview from the headline busbw figure's
+    # raster sibling, so the image on GitHub always matches the current data.
+    preview_src = os.path.join(figures_dir, "busbw_vs_size.png")
+    preview_dst = os.path.join(repo_root, "docs", "assets", "busbw_preview.png")
+    if os.path.exists(preview_src) and os.path.isdir(os.path.dirname(preview_dst)):
+        shutil.copyfile(preview_src, preview_dst)
+        print(f"  refreshed preview image: {preview_dst}")
 
     print(f"done. figures: {figures_dir}/  tables: {tables_dir}/")
 

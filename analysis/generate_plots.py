@@ -87,20 +87,28 @@ def plot_busbw_vs_size(df, fits, out_path, n_subset=(2, 4, 8, 16)):
     fig.suptitle("Achieved bus bandwidth vs message size, by process count")
     fig.tight_layout()
     fig.savefig(out_path)
+    # Also emit a raster sibling so the README can preview this headline
+    # figure without a PDF viewer (docs/assets/busbw_preview.png is copied
+    # from here by run_full_analysis.py).
+    if out_path.endswith(".pdf"):
+        fig.savefig(out_path[:-4] + ".png", dpi=140)
     plt.close(fig)
 
 
 def plot_efficiency_heatmap(df, fits, out_path):
     med = rows_for_stat(df, ACHIEVED_STAT)
     algos = algorithms_present(df)
-    fig, axes = plt.subplots(1, len(algos), figsize=(5.6 * len(algos), 4.6))
-    axes = np.atleast_1d(axes)
-
     n_values = sorted(med["num_procs"].unique())
     size_values = sorted(med["message_size_bytes"].unique())
-    image = None
 
-    for ax, algo in zip(axes, algos):
+    # Compute every panel's grid first so all panels can share one color
+    # scale. On single-node shared-memory transport the fitted 1/beta is a
+    # sustained-bandwidth average across the whole size range, not a hard
+    # ceiling: cache-resident mid-size messages can move bytes faster than
+    # that average, so efficiency legitimately exceeds 1 there. Clamping vmax
+    # to 1 would hide exactly that effect, so vmax adapts to the data.
+    grids = {}
+    for algo in algos:
         _alpha, beta, _r2 = fits[algo]
         peak = theoretical_peak_busbw_GBps(beta)
         sub_algo = med[med["algorithm"] == algo]
@@ -112,7 +120,17 @@ def plot_efficiency_heatmap(df, fits, out_path):
                 ]
                 if not row.empty:
                     grid[i, j] = efficiency(float(row["busbw_GBps"].iloc[0]), peak)
-        image = ax.imshow(grid, aspect="auto", origin="lower", vmin=0, vmax=1, cmap="magma")
+        grids[algo] = grid
+
+    finite_maxes = [np.nanmax(g) for g in grids.values() if np.isfinite(np.nanmax(g))]
+    vmax = max(1.0, np.ceil(max(finite_maxes) * 10.0) / 10.0) if finite_maxes else 1.0
+
+    fig, axes = plt.subplots(1, len(algos), figsize=(5.6 * len(algos), 4.6))
+    axes = np.atleast_1d(axes)
+    image = None
+
+    for ax, algo in zip(axes, algos):
+        image = ax.imshow(grids[algo], aspect="auto", origin="lower", vmin=0, vmax=vmax, cmap="magma")
         ax.set_xticks(range(len(size_values)))
         ax.set_xticklabels([human_bytes(s) for s in size_values], rotation=90, fontsize=6)
         ax.set_yticks(range(len(n_values)))

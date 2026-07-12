@@ -19,17 +19,33 @@ installation, not a declaration-only substitute:
 - `ctest --test-dir build-real --output-on-failure` passed all 17 tests,
   including real multi-process correctness and edge-case runs at N = 1, 2,
   3, 4, 5, 7, 8, and 16.
-- The standalone `correctness_check` passed at N = 8. A two-rank smoke run
-  of `benchmark` and `pingpong` wrote real local measurements under
-  `results/local_run/`; those gitignored files are intentionally separate
-  from the synthetic committed sample dataset.
+- The standalone `correctness_check` passed at N = 8. A full `--quick`
+  sweep of `benchmark` (N in {2, 4, 8, 16}, 8 B through 128 MiB) and a
+  `pingpong` latency sweep were then run, writing real measurements to
+  `results/local_run/`.
+
+**The committed sample dataset is now real, not synthetic.** That
+`--quick` sweep's output replaced the previous synthetic placeholder at
+`results/sample_run/`, so `make report` on a clean checkout now builds
+entirely from real single-node Microsoft MPI measurements. This was the
+right call because the synthetic-data caveat was the repository's biggest
+credibility weakness for the resume claims it substantiates, and the real
+data tells a stronger story than the synthetic ideal did: a clean crossover
+where the custom ring loses to the vendor default below a few kilobytes
+(more latency-bound steps) and wins above it (bandwidth optimality). Two
+limitations come with it and are documented wherever the data is cited: the
+run is single-node (shared-memory transport, so bus bandwidth peaks in the
+L3-cache-resident size range and the single-slope Hockney fit is only a
+loose description, R^2 around 0.3 to 0.4), and it has two algorithm variants
+rather than three.
 
 Microsoft MPI validates the portable point-to-point implementation and the
 default vendor comparison. It does not provide Open MPI's `coll/tuned` MCA
 controls, so the forced `mpi-ring` vendor comparison remains an Open MPI
-specific experiment. `tests/CMakeLists.txt` consequently adds Open MPI's
-root and oversubscription launcher flags only on Unix, where the CI uses
-Open MPI, and uses native Microsoft MPI syntax on Windows.
+specific experiment left for a cluster sweep. `tests/CMakeLists.txt`
+consequently adds Open MPI's root and oversubscription launcher flags only
+on Unix, where the CI uses Open MPI, and uses native Microsoft MPI syntax on
+Windows.
 
 ## Initial sandbox constraints (historical)
 
@@ -54,21 +70,24 @@ repeating it in every entry:
   `tests/validate_ring_logic.py`, a transport-independent simulation that
   reproduces the exact same send/receive formulas across the full N and
   count test matrix and was actually run, with all cases passing.
-- `results/sample_run/`'s data is synthetic (see its own README.md and
-  `docs/BENCHMARKING.md`), generated from the Hockney cost model plus
-  noise, specifically so the Python analysis pipeline and the LaTeX report
-  could be exercised and reviewed end to end. It is labeled as such
-  everywhere it appears: the generator script's docstring, the CSV
-  directory's README, and a prominent paragraph in the report itself
-  (`report/sections/04_experimental_setup.tex`).
+- `results/sample_run/`'s data was, during this sandbox phase, synthetic:
+  generated from the Hockney cost model plus noise by
+  `generate_synthetic_sample.py`, specifically so the Python analysis
+  pipeline and the LaTeX report could be exercised and reviewed end to end
+  before any real MPI existed. That placeholder has since been replaced by
+  the real Microsoft MPI sweep (see the first entry above); the generator
+  script is retained only as the harness that validates the weighted-fit
+  procedure against a dataset with known alpha/beta.
 - CMake itself is also not installed in this sandbox, so the CMake build
   was authored to standard practice but never configured or built here;
   `g++` was used directly (bypassing CMake) to compile and, where possible,
   run individual translation units instead.
 
 This history remains useful because it explains why the committed sample
-dataset is synthetic. The real Windows MPI verification above supersedes the
-old limitation for the current local development environment.
+dataset was synthetic for much of the project's life and why the analysis
+pipeline was designed to be validated without real hardware. The real
+Windows MPI verification above supersedes that limitation: the committed
+dataset is now a real measurement.
 
 ## C++ standard: C++20, not C++17
 
@@ -231,14 +250,18 @@ handful of largest, slowest configurations: beta (the bandwidth term, which
 sets those large values) comes out precisely, but alpha (whose entire
 contribution to T is only visible at the smallest sizes) is comparatively
 unconstrained and can be badly biased even when R^2 looks excellent.
-Fitting the synthetic sample dataset (whose true alpha/beta are known,
-since the generator script sets them) confirmed this directly: unweighted
-OLS recovered beta to within a fraction of a percent but missed alpha by up
-to 17%; weighting each row by 1/T (turning the fit into a relative-error,
-not absolute-error, minimization) recovered both to within 0.3% on every
-algorithm variant. `analysis/theoretical_model.py`'s `fit_alpha_beta`
-implements the weighted version, with the comparison documented in its own
-docstring.
+Fitting a synthetic dataset with known ground truth (produced by
+`results/sample_run/generate_synthetic_sample.py`, whose true alpha/beta the
+generator sets) confirmed this directly: unweighted OLS recovered beta to
+within a fraction of a percent but missed alpha by up to 17%; weighting each
+row by 1/T (turning the fit into a relative-error, not absolute-error,
+minimization) recovered both to within 0.3% on every algorithm variant.
+`analysis/theoretical_model.py`'s `fit_alpha_beta` implements the weighted
+version, with the comparison documented in its own docstring. That
+validation is why the generator script is kept even though the committed
+dataset is now a real measurement; on the real single-node data the same
+weighted fit returns a much lower R^2, which the report attributes to
+shared-memory cache effects rather than to the fitting procedure.
 
 ## Summary table reported at N = 16, not averaged across N
 

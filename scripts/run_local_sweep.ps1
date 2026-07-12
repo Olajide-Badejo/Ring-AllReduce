@@ -46,7 +46,7 @@ try {
     Write-Host "Output directory: $OutputDir"
 
     foreach ($numProcs in $processCounts) {
-        Write-Host "N = $numProcs: ring, mpi-default"
+        Write-Host "N = ${numProcs}: ring, mpi-default"
         & $mpiExec.Source -n $numProcs $benchmark `
             --algorithm ring,mpi-default `
             --dtype $DType `

@@ -31,9 +31,10 @@ Or, from a clean checkout, `make bench` (opt-in, runs a real sweep) followed
 by `make report` (regenerates figures/tables from whatever
 `results/local_run/` currently holds and compiles the PDF). `make report`
 alone, with no prior `make bench`, uses the committed
-`results/sample_run/` dataset instead, which is synthetic (see that
-directory's own README.md) and will compile in well under a minute since it
-involves no MPI at all.
+`results/sample_run/` dataset instead, which is a real single-node Microsoft
+MPI measurement (see that directory's own README.md for provenance and the
+single-node caveats) and will compile in well under a minute since the
+report build itself involves no MPI at all.
 
 ## Windows desktop using Microsoft MPI
 
@@ -86,10 +87,14 @@ from a different machine's run without re-checking it.
 
 This project's build specification names an Intel Core i7-14700K
 workstation (32 GB DDR5, an RTX 5070 that this CPU-only project does not
-use) as the intended benchmarking machine. The real Microsoft MPI smoke
-measurements described above were collected locally on this desktop, not in
-a sandbox. They cover only N = 2 and 8 B through 64 KiB, so they validate
-the execution path but are not a replacement for the full benchmark grid.
+use) as the intended benchmarking machine, and that is the machine the
+committed dataset was actually measured on. The `results/sample_run/` data
+is a real `--quick` sweep collected here under Microsoft MPI: N in
+{2, 4, 8, 16} across the full 8 B to 128 MiB message-size axis, plus a
+matching `pingpong` latency sweep. It is single-node (shared-memory
+transport) and omits the forced vendor-ring variant, both of which a
+multi-node Open MPI sweep would address; see `results/sample_run/README.md`
+for the full provenance and caveats.
 
 ## Statistical methodology
 
